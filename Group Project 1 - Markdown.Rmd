@@ -1,0 +1,89 @@
+---
+title: "Group Project 1 - Markdown"
+output: html_notebook
+---
+
+DATA EXTRACTION
+
+```{r}
+library(readr)
+BroadbandDataJun19 <- read_csv("Fixed_Broadband_Deployment_Data__Jun__2019_Status_V2.csv")
+
+DataJun19 <- subset(BroadbandDataJun19, select = c("Provider Name", "DBA Name", "State", "Census Block FIPS Code", "Technology Code", "Consumer", "Max Advertised Downstream Speed (mbps)", "MaxAdUp", "Business"))
+
+DataJun19$`Provider Name` <- as.factor(DataJun19$`Provider Name`)
+DataJun19$`DBA Name` <- as.factor(DataJun19$`DBA Name`)
+DataJun19$State <- as.factor(DataJun19$State)
+DataJun19$`Census Block FIPS Code` <- as.factor(DataJun19$`Census Block FIPS Code`)
+
+str(DataJun19)
+
+summary(DataJun19)
+
+```
+
+```{r}
+library(readr)
+BroadbandDataDec19 <- read_csv("Fixed_Broadband_Deployment_Data__December_2019 copy.csv")
+
+DataDec19 <- subset(BroadbandDataDec19, select = c("Provider Name", "DBA Name", "State", "Census Block FIPS Code", "Technology Code", "Consumer", "Max Advertised Downstream Speed (mbps)", "MaxAdUp", "Business"))
+
+str(DataDec19)
+
+
+DataDec19$`Provider Name` <- as.factor(DataDec19$`Provider Name`)
+DataDec19$`DBA Name` <- as.factor(DataDec19$`DBA Name`)
+DataDec19$State <- as.factor(DataDec19$State)
+DataDec19$`Census Block FIPS Code` <- as.factor(DataDec19$`Census Block FIPS Code`)
+
+summary(DecJun19)
+
+```
+
+SAMPLING
+```{r}
+#install dplyr
+#install tidyverse
+library(dplyr)
+library(tidyr)
+
+SampleDataJun <- sample_n(DataJun19, size = 3000, replace = T)
+
+```
+
+```{r}
+#install dplyr
+#install tidyverse
+library(dplyr)
+library(tidyr)
+
+SampleDataDec <- sample_n(DataDec19, size = 3000, replace = T)
+
+```
+
+DOWNLOAD SAMPLE DATASET
+```{r}
+install.packages("rJava")
+install.packages("xlsx")
+system("java -version")
+library(rJava)
+library(xlsx)
+write.xlsx(SampleDataJun, "SampleDataJun19.xlsx")
+
+install.packages("rJava")
+install.packages("xlsx")
+system("java -version")
+library(rJava)
+library(xlsx)
+write.xlsx(SampleDataDec, "SampleDataDec19.xlsx")
+
+```
+
+MERGE DATASETS
+```{r}
+library(readr)
+SampleDataJun19 <- read_csv("SampleDataJun19.csv")
+library(readr)
+SampleDataDec19 <- read_csv("SampleDataDec19.csv")
+BroadbandData19 <- rbind(SampleDataJun19, SampleDataDec19)
+```
