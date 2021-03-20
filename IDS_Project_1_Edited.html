@@ -1,0 +1,686 @@
+---
+title: "Introduction to Data Science - Project I"
+author: "Team 5: Dreispiel Juan Nicole, Espinosa Robles Manuel, otiani SOnam, Nieves Pérez Luisa Fernanda"
+date: "today"
+# date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    number_sections: false
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r basic, include=F}
+# use this function to conveniently load libraries and work smoothly with knitting
+# can add quietly=T option to the require() function
+# the loadPkg function essentially replaced/substituted two functions install.packages() and library() in one step.
+loadPkg = function(x) { if (!require(x,character.only=T, quietly =T)) { install.packages(x,dep=T,repos="http://cran.us.r-project.org"); if(!require(x,character.only=T)) stop("Package not found") } }
+
+# unload/detact package when done using it
+unloadPkg = function(pkg, character.only = FALSE) { 
+  if(!character.only) { pkg <- as.character(substitute(pkg)) } 
+  search_item <- paste("package", pkg,sep = ":") 
+  while(search_item %in% search()) { detach(search_item, unload = TRUE, character.only = TRUE) } 
+}
+```
+
+```{r setup, include=FALSE}
+# some of common options (and the defaults) are: 
+# include=T, eval=T, echo=T, results='hide'/'asis'/'markup',..., collapse=F, warning=T, message=T, error=T, cache=T, fig.width=6, fig.height=4, fig.dim=c(6,4) #inches, fig.align='left'/'center','right', 
+knitr::opts_chunk$set(warning = F, results = "markup", message = F)
+# knitr::opts_chunk$set(warning = F, results = "hide", message = F)
+# knitr::opts_chunk$set(include = F)
+# knitr::opts_chunk$set(echo = TRUE)
+options(scientific=T, digits = 3) 
+# options(scipen=9, digits = 3) 
+# ‘scipen’: integer. A penalty to be applied when deciding to print numeric values in fixed or exponential notation.  Positive values bias towards fixed and negative towards scientific notation: fixed notation will be preferred unless it is more than ‘scipen’ digits wider.
+# use scipen=999 to prevent scientific notation at all times
+```
+
+```{r xkablesummary}
+loadPkg("xtable")
+loadPkg("kableExtra")
+loadPkg("stringi")
+
+xkabledply = function(modelsmmrytable, title="Table", digits = 4, pos="left", bso="striped", wide=FALSE) { 
+  #' Combining base::summary, xtable, and kableExtra, to easily display model summary. 
+  #' wrapper for the base::summary function on model objects
+  #' Can also use as head for better display
+  #' ELo 202004 GWU DATS
+  #' version 1.2
+  #' @param modelsmmrytable This can be a generic table, a model object such as lm(), or the summary of a model object summary(lm()) 
+  #' @param title Title of table. 
+  #' @param digits Number of digits to display
+  #' @param pos Position of table, c("left","center","right") 
+  #' @param bso bootstrap_options = c("basic", "striped", "bordered", "hover", "condensed", "responsive")
+  #' @param wide print table in long (FALSE) format or wide (TRUE) format
+  #' @return HTML table for display
+  #' @examples
+  #' library("xtable")
+  #' library("kableExtra")
+  #' xkabledply( df, title="Table testing", pos="left", bso="hover" )
+  #' xkabledply( ISLR::Hitters[1:5,] )
+  if (wide) { modelsmmrytable <- t(modelsmmrytable) }
+  modelsmmrytable %>%
+    xtable() %>% 
+    kable(caption = title, digits = digits) %>%
+    kable_styling(bootstrap_options = bso, full_width = FALSE, position = pos)
+}
+
+xkabledplyhead = function(df, rows=5, title="Head", digits = 4, pos="left", bso="striped") { 
+  xkabledply(df[1:rows, ], title, digits, pos, bso, wide=FALSE)
+}
+
+xkabledplytail = function(df, rows=5, title="Tail", digits = 4, pos="left", bso="striped") { 
+  trows = nrow(df)
+  xkabledply(df[ (trows-rows+1) : trows, ], title, digits, pos, bso, wide=FALSE)
+}
+
+xkablesummary = function(df, title="Table: Statistics summary.", digits = 4, pos="left", bso="striped") { 
+  #' Combining base::summary, xtable, and kableExtra, to easily display numeric variable summary of dataframes. 
+  #' ELo 202004 GWU DATS
+  #' version 1.2
+  #' @param df The dataframe.
+  #' @param title Title of table. 
+  #' @param digits Number of digits to display
+  #' @param pos Position of table, c("left","center","right") 
+  #' @param bso bootstrap_options = c("basic", "striped", "bordered", "hover", "condensed", "responsive")
+  #' @return The HTML summary table for display, or for knitr to process into other formats 
+  #' @examples
+  #' xkablesummary( faraway::ozone )
+  #' xkablesummary( ISLR::Hitters, title="Five number summary", pos="left", bso="hover"  )
+  
+  s = summary(df) %>%
+    apply( 2, function(x) stringr::str_remove_all(x,c("Min.\\s*:\\s*","1st Qu.\\s*:\\s*","Median\\s*:\\s*","Mean\\s*:\\s*","3rd Qu.\\s*:\\s*","Max.\\s*:\\s*")) ) %>% # replace all leading words
+    apply( 2, function(x) stringr::str_trim(x, "right")) # trim trailing spaces left
+  
+  colnames(s) <- stringr::str_trim(colnames(s))
+  
+  if ( dim(s)[1] ==6 ) { rownames(s) <- c('Min','Q1','Median','Mean','Q3','Max') 
+  } else if ( dim(s)[1] ==7 ) { rownames(s) <- c('Min','Q1','Median','Mean','Q3','Max','NA') }
+  
+  xkabledply(s, title=title, digits = digits, pos=pos, bso=bso )
+}
+
+xkablevif = function(model, title="VIFs of the model", digits = 3, pos="left", bso="striped", wide=TRUE) { 
+  #' Combining faraway::vif, xtable, and kableExtra, to easily display numeric summary of VIFs for a model. 
+  #' ELo 202004 GWU DATS
+  #' version 1.2
+  #' @param model The lm or compatible model object.
+  #' @param title Title of table. 
+  #' @param digits Number of digits to display
+  #' @param pos Position of table, c("left","center","right") 
+  #' @param bso bootstrap_options = c("basic", "striped", "bordered", "hover", "condensed", "responsive")
+  #' @param wide print table in long (FALSE) format or wide (TRUE) format
+  #' @return The HTML summary table of the VIFs for a model for display, or for knitr to process into other formats 
+  #' @examples
+  #' xkablevif( lm(Salary~Hits+RBI, data=ISLR::Hitters, wide=T ) )
+  
+  vifs = table( names(model$coefficients)[2:length(model$coefficients)] ) # remove intercept to set column names
+  vifs[] = faraway::vif(model) # set the values
+  if (wide) { vifs <- t(vifs) }
+  xkabledply( vifs, title=title, digits = digits, pos=pos, bso=bso )
+}
+```
+
+```{r outlierKD2}
+# Fix outliers
+outlierKD2 <- function(df, var, rm=FALSE, boxplt=FALSE, histogram=TRUE, qqplt=FALSE) { 
+    #' Original outlierKD functino by By Klodian Dhana,
+    #' https://www.r-bloggers.com/identify-describe-plot-and-remove-the-outliers-from-the-dataset/
+    #' Modified to have third argument for removing outliers instead of interactive prompt, 
+    #' and after removing outlier, original df will not be changed. The function returns the a df, 
+    #' which can be saved as original df name if desired.
+    #' Also added QQ-plot in the output, with options to show/hide boxplot, histogram, qqplot.
+    #' Check outliers, and option to remove them, save as a new dataframe. 
+    #' @param df The dataframe.
+    #' @param var The variable in the dataframe to be checked for outliers
+    #' @param rm Boolean. Whether to remove outliers or not.
+    #' @param boxplt Boolean. Whether to show the boxplot, before and after outliers removed.
+    #' @param histogram Boolean. Whether to show the histogram, before and after outliers removed.
+    #' @param qqplt Boolean. Whether to show the qqplot, before and after outliers removed.
+    #' @return The dataframe with outliers replaced by NA if rm==TRUE, or df if nothing changed
+    #' @examples
+    #' outlierKD2(mydf, height, FALSE, TRUE, TRUE, TRUE)
+    #' mydf = outlierKD2(mydf, height, TRUE, TRUE, TRUE, TRUE)
+    #' mydfnew = outlierKD2(mydf, height, TRUE)
+    dt = df # duplicate the dataframe for potential alteration
+    var_name <- eval(substitute(var),eval(dt))
+    na1 <- sum(is.na(var_name))
+    m1 <- mean(var_name, na.rm = T)
+    par(mfrow=c(2, boxplt+histogram+qqplt), oma=c(0,0,3,0))
+    if (qqplt) { 
+      qqnorm(var_name, main = "With outliers")
+      qqline(var_name)
+    }
+    if (histogram) { hist(var_name, main="With outliers", xlab=NA, ylab=NA) }
+    if (boxplt) { boxplot(var_name, main="With outliers") }
+
+    outlier <- boxplot.stats(var_name)$out
+    mo <- mean(outlier)
+    var_name <- ifelse(var_name %in% outlier, NA, var_name)
+    if (qqplt) { 
+      qqnorm(var_name, main = "Without outliers")
+      qqline(var_name)
+    }
+    if (histogram) { hist(var_name, main="Without outliers", xlab=NA, ylab=NA) }
+    if (boxplt) { boxplot(var_name, main="Without outliers") }
+
+    title("Outlier Check", outer=TRUE)
+    na2 <- sum(is.na(var_name))
+    cat("Outliers identified:", na2 - na1, "\n")
+    cat("Propotion (%) of outliers:", round((na2 - na1) / sum(!is.na(var_name))*100, 1), "\n")
+    cat("Mean of the outliers:", round(mo, 2), "\n")
+    m2 <- mean(var_name, na.rm = T)
+    cat("Mean without removing outliers:", round(m1, 2), "\n")
+    cat("Mean if we remove outliers:", round(m2, 2), "\n")
+    
+    # response <- readline(prompt="Do you want to remove outliers and to replace with NA? [yes/no]: ")
+    # if(response == "y" | response == "yes"){
+    if(rm){
+        dt[as.character(substitute(var))] <- invisible(var_name)
+        #assign(as.character(as.list(match.call())$dt), dt, envir = .GlobalEnv)
+        cat("Outliers successfully removed", "\n")
+        return(invisible(dt))
+    } else {
+        cat("Nothing changed", "\n")
+        return(invisible(df))
+    }
+}
+```
+
+# Introduction.
+
+
+Communication has evolved and transformed the way in which we live nowadays, and
+so have the tools we use for that purpose. Currently, the primary tool of communication
+is the internet, whose impact is so significant we can say that thanks to it, the 
+COVID-19 crisis impact has not been that strong within the society, no only
+economically, but also in topics such as health, business, education, and others.
+Together with the internet, cell phones, personal computers, and the broadband
+are additional tools that come together with the package since they are also
+needed for it.
+
+
+Considering that, we will analyze how these tools have been adopted among some
+countries and which ones are the ones leading in these categories. 
+
+To target that goal, we will be working with the following tables:
+
+1. Internet Users: Contains the percentage of population using the internet from
+1960 to 2019.
+
+2. Broadband Subscribers: Contains the number of people who is subscribed to a
+broadband service per country, excluding people who have access to data 
+communication via mobile-cellular networks. This information is from 1998 to 2019.
+
+3. Personal Computers: Amount of personal computers per country from 1990
+to 2006.
+
+4. Cell phones: Amount of cell phones per country from 1960 to 2019.
+
+5. Broadband in the USA: Contains the offered speed of each service provider 
+in The USA in 2019.
+
+Source of data 1 to 4: https://www.gapminder.org/data/
+
+Source of data 5: https://opendata.fcc.gov/Wireline/Fixed-Broadband-Deployment-Data-December-2019/whue-6pnt
+
+
+Below are displayed the first six rows of each table.
+
+```{r, results='markup'}
+
+t1 <- data.frame(read.csv("internet_users.csv"))
+
+kable(head(t1),
+  col.names = gsub("[X]", "", names(t1)),
+  caption = "Table 1: Worldwide internet Users from 1960 to 2019.",
+  "html") %>%
+  kable_styling(full_width = F)
+
+t2 <- data.frame(read.csv("broadband_subscribers.csv"))
+
+kable(head(t2),
+  col.names = gsub("[X]", "", names(t2)),
+  caption = "Table 2: Worldwide broadband subscribers from 1998 to 2019.",
+  "html") %>%
+  kable_styling(full_width = F)
+
+t3 <- data.frame(read.csv("personal_computers_total.csv"))
+
+kable(head(t3),
+  col.names = gsub("[X]", "", names(t3)),
+  caption = "Table 3: Worlwide personal computers from 1990 to 2006.",
+  "html") %>%
+  kable_styling(full_width = F)
+
+t4 <- data.frame(read.csv("cell_phones_total.csv"))
+
+kable(head(t4),
+  col.names = gsub("[X]", "", names(t4)),
+  caption = "Table 4: Worlwide cell phones from 1960 to 2019.",
+  "html") %>%
+  kable_styling(full_width = F)
+
+t5 <- data.frame(read.csv("BroadbandData_M.csv"))
+
+kable(head(t5),
+  col.names = gsub("[X]", "", names(t5)),
+  caption = "Table 5: Broadband in The United States in 2019.",
+  "html") %>%
+  kable_styling(full_width = F)
+
+rows_t1 <- nrow(t1)
+cols_t1 <- ncol(t1)
+
+rows_t2 <- nrow(t2)
+cols_t2 <- ncol(t2)
+
+rows_t3 <- nrow(t3)
+cols_t3 <- ncol(t3)
+
+rows_t4 <- nrow(t4)
+cols_t4 <- ncol(t4)
+
+rows_t5 <- nrow(t5)
+cols_t5 <- ncol(t)
+
+```
+
+The information in the whole tables is the following.
+
+* Table 1:
+    - `r rows_t1` rows.
+    - `r cols_t1` columns.
+  
+* Table 2:
+    - `r rows_t2` rows.
+    - `r cols_t2` columns.
+
+* Table 3:
+    - `r rows_t3` rows.
+    - `r cols_t3` columns.
+
+* Table 4:
+    - `r rows_t4` rows.
+    - `r cols_t4` columns.
+ 
+* Table 5:
+    - `r rows_t5` rows.
+    - `r cols_t5` columns.
+
+
+To be more consistent with the analysis and the information, we will make sub-tables
+of the original ones, since we will be focusing the analysis from the year 2000 to 2019.
+Be aware that in the case of table 3, the analysis will be possible only until year
+2006, since this is the last day from which we have information. The information
+of the first six rows is displayed as well.
+
+```{r}
+
+t6 <- t1 [ , c(1, 42:61)]
+
+kable(head(t6),
+  col.names = gsub("[X]", "", names(t6)),
+  caption = "Table 6: Worldwide internet Users from 2000 to 2019.",
+  "html") %>%
+  kable_styling(full_width = F)
+
+t7 <- t2 [ , c(1, 4:23)]
+
+kable(head(t7),
+  col.names = gsub("[X]", "", names(t7)),
+  caption = "Table 7: Worldwide broadband subscribers from 2000 to 2019.",
+  "html") %>%
+  kable_styling(full_width = F)
+
+t8 <- t3 [ , c(1, 12:18)]
+
+kable(head(t8),
+  col.names = gsub("[X]", "", names(t8)),
+  caption = "Table 8: Worlwide personal computers from 2000 to 2006.",
+  "html") %>%
+  kable_styling(full_width = F)
+
+t9 <- t4 [ , c(1, 42:61)]
+
+kable(head(t9),
+  col.names = gsub("[X]", "", names(t9)),
+  caption = "Table 9: Worlwide cell phones from 2000 to 2019.",
+  "html") %>%
+  kable_styling(full_width = F)
+
+```
+
+# Exploratory Data Analysis (EDA).
+
+
+Now let us calculate the summary statistics of tables 5 to 9 to have an overview
+of the how the behavior has been in the topics we are working on.
+
+```{r}
+
+stats_t5 <- xkablesummary(t5, title = "Table 10: Summary Statistics of broadband service provided in The USA")
+stats_t5
+
+stats_t6 <- xkablesummary(t6, title = "Table 11: Summary Statistics of internet users from 2000 to 2019 in the world.")
+stats_t6
+
+stats_t7 <- xkablesummary(t7, title = "Table 12: Summary Statistics of broadband subscribers from 2000 to 2019 in the world.")
+stats_t7
+
+stats_t8 <- xkablesummary(t8, title = "Table 13: Summary Statistics of personal computers from 2000 to 2006 in the world.")
+stats_t8
+
+stats_t9 <- xkablesummary(t9, title = "Table 14: Summary Statistics of cell phones from 2000 to 2019 in the world.")
+stats_t9
+
+```
+
+Overall, we see that on average the tendency to the use of broadband, internet,
+personal computers, and cell phones has had an increase in the last 20 years,
+7 in the case of personal computers.
+
+When it comes to the broadband services that are offered in The USA in 2019, we 
+see that on average, the downloading speed is 109 [mbps], while the upload speed 
+is 29 [mbps]; therefore, we can say that it is faster for people in The USA to 
+download information than upload it. When it comes to the maximum speed, both
+things can be done at 1,000 [mbps] if needed. It would have been interesting to 
+see how this service has improved over the years when it comes to speed
+. Unfortunately, we do not have that information.
+
+To better see the behavior in the topics we are analyzing, we created charts 1 to 4.
+
+
+```{r, results='markup'}
+
+library(ggplot2)
+
+ggplot(t6) +
+  geom_boxplot(aes(x = 2000, y = X2000), color = "dark blue") +
+  geom_boxplot(aes(x = 2005, y = X2005), color = "dark green") +
+  geom_boxplot(aes(x = 2010, y = X2010), color = "orange") +
+  geom_boxplot(aes(x = 2015, y = X2015), color = "black") +
+  geom_boxplot(aes(x = 2019, y = X2019), color = "red") +
+  xlab("Year") +
+  ylab("Percentage") +
+  ggtitle("Chart 1: Percentage of internet users in the world from 2000 to 2019.") +
+  theme(plot.title = element_text(hjust = 0.5, colour = "dark blue"))
+
+```
+
+```{r, results='markup'}
+
+ggplot(t7) +
+  geom_boxplot(aes(x = 2000, y = X2000), color = "dark blue") +
+  geom_boxplot(aes(x = 2005, y = X2005), color = "dark green") +
+  geom_boxplot(aes(x = 2010, y = X2010), color = "orange") +
+  geom_boxplot(aes(x = 2015, y = X2015), color = "black") +
+  geom_boxplot(aes(x = 2019, y = X2019), color = "red") +
+  xlab("Year") +
+  ylab("Subscriber") +
+  ggtitle("Chart 2: Broadband subscribers in the world from 2000 to 2019.") +
+  theme(plot.title = element_text(hjust = 0.5, colour = "dark blue"))
+
+```
+
+```{r, results='markup'}
+
+ggplot(t8) +
+  geom_boxplot(aes(x = 2000, y = X2000), color = "dark blue") +
+  geom_boxplot(aes(x = 2002, y = X2002), color = "dark green") +
+  geom_boxplot(aes(x = 2004, y = X2004), color = "orange") +
+  geom_boxplot(aes(x = 2006, y = X2006), color = "black") +
+  xlab("Year") +
+  ylab("Personal computers") +
+  ggtitle("Chart 3: Personal computers in the world from 2000 to 2006.") +
+  theme(plot.title = element_text(hjust = 0.5, colour = "dark blue"))
+
+```
+
+```{r, results='markup'}
+
+ggplot(t9) +
+  geom_boxplot(aes(x = 2000, y = X2000), color = "dark blue") +
+  geom_boxplot(aes(x = 2005, y = X2005), color = "dark green") +
+  geom_boxplot(aes(x = 2010, y = X2010), color = "orange") +
+  geom_boxplot(aes(x = 2015, y = X2015), color = "black") +
+  geom_boxplot(aes(x = 2019, y = X2019), color = "red") +
+  xlab("Year") +
+  ylab("Cell phones") +
+  ggtitle("Chart 4: Cell phones in the world from 2000 to 2019.") +
+  theme(plot.title = element_text(hjust = 0.5, colour = "dark blue"))
+
+```
+
+With the exception of chart 1, we see that there is a tendency in the other
+three plots of some countries that are above the rest when it comes to growth
+of each concept.
+
+From chart 1 specifically, Table 15 presents the top ten countries when it comes
+to the percentage of the population who use the internet. Additionally, The United States
+is added at the end of the table since they are not in place eleven in this
+topic. According to this table, internet usage has been led by European 
+countries.
+
+```{r, results='markup'}
+
+t15 <- data.frame(read.csv("Top_Countries_Internet_Users.csv"))
+
+kable(t15,
+  col.names = gsub("[X]", "", names(t15)),
+  caption = "Table 15: Top 10 countries in Internet Users.",
+  "html") %>%
+  kable_styling(full_width = F)
+
+```
+Considering what has been presented in table 15, we will work now on the
+following countries:
+
+     1. Canada
+     2. China
+     3. Denmark
+     4. Iceland
+     5. Kuwait
+     6. Mexico
+     7. Norway
+     8. Qatar
+     9. South Korea
+     10. The United Arab Eirates
+     11. The United States
+The United States, China, and Mexico have been added for the interest of the team.
+
+In the following information, tables 15 to  18 contain the leading countries
+in each of the previous categories. Additionally, charts 5 to 8 display how the
+the growth of each type of technology tool has been in the years of interest.
+
+```{r, results='markup'}
+
+chart5 <- data.frame(read.csv("Internet_Users_Chart.csv", fileEncoding = "UTF-8-BOM"))
+#chart5
+
+ggplot(chart5, aes(x= Year)) +
+  geom_line(aes(y= Canada, color= "Canada")) + 
+  geom_line(aes(y= Denmark, color= "Denmark")) +
+  geom_line(aes(y= Iceland, color= "Iceland")) +
+  geom_line(aes(y= Kuwait, color= "Kuwait")) +
+  geom_line(aes(y= Mexico, color= "Mexico")) +
+  geom_line(aes(y= Norway , color= "Norway")) +
+  geom_line(aes(y= Qatar, color= "Qatar")) +
+  geom_line(aes(y= South_Korea, color= "South Korea")) +
+  geom_line(aes(y= United_Arab_Emirates, color= "United Arab Emirates")) +
+  geom_line(aes(y= United_States, color= "United States")) +
+  geom_line(aes(y= China, color = "China")) +
+  xlab("Year") +
+  ylab("Percentage of population") +
+  xlim(2000, 2020)
+  ggtitle("Chart 5: Percentage of population who uses internet") +
+  theme(plot.title = element_text(hjust = 0.5, colour = "dark blue"))
+
+```
+
+```{r, results='markup'}
+
+t16 <- data.frame(read.csv("Top_Countries_Broadband_Subscribers.csv"))
+
+kable(t16,
+  col.names = gsub("[X]", "", names(t16)),
+  caption = "Table 16: Top 10 countries in Broadband Subscribers.",
+  "html") %>%
+  kable_styling(full_width = F)
+
+```
+
+```{r, results='markup'}
+
+chart6 <- data.frame(read.csv("broadband_subscribers_chart.csv", fileEncoding = "UTF-8-BOM"))
+#chart6
+
+ggplot(chart6, aes(x= Year)) +
+  geom_line(aes(y= Canada, color= "Canada")) + 
+  geom_line(aes(y= Denmark, color= "Denmark")) +
+  geom_line(aes(y= Iceland, color= "Iceland")) +
+  geom_line(aes(y= Kuwait, color= "Kuwait")) +
+  geom_line(aes(y= Mexico, color= "Mexico")) +
+  geom_line(aes(y= Norway , color= "Norway")) +
+  geom_line(aes(y= Qatar, color= "Qatar")) +
+  geom_line(aes(y= South_Korea, color= "South Korea")) +
+  geom_line(aes(y= United_Arab_Emirates, color= "United Arab Emirates")) +
+  geom_line(aes(y= United_States, color= "United States")) +
+  geom_line(aes(y= China, color = "China")) +
+  xlab("Year") +
+  ylab("Amount of subscribers") +
+  xlim(2000, 2020)
+  ggtitle("Chart 6: Broadband subscribers behavior in the last 20 years.") +
+  theme(plot.title = element_text(hjust = 0.5, colour = "dark blue"))
+
+```
+
+```{r, results='markup'}
+
+t17 <- data.frame(read.csv("Top_Countries_PC.csv"))
+
+kable(t17,
+  col.names = gsub("[X]", "", names(t17)),
+  caption = "Table 17: Top 10 countries in Personal Computers.",
+  "html") %>%
+  kable_styling(full_width = F)
+
+```
+
+```{r, results='markup'}
+
+chart7 <- data.frame(read.csv("personal_computers_total_chart.csv", fileEncoding = "UTF-8-BOM"))
+#chart7
+
+ggplot(chart7, aes(x= Year)) +
+  geom_line(aes(y= Canada, color= "Canada")) + 
+  geom_line(aes(y= Denmark, color= "Denmark")) +
+  geom_line(aes(y= Iceland, color= "Iceland")) +
+  geom_line(aes(y= Kuwait, color= "Kuwait")) +
+  geom_line(aes(y= Mexico, color= "Mexico")) +
+  geom_line(aes(y= Norway , color= "Norway")) +
+  geom_line(aes(y= Qatar, color= "Qatar")) +
+  geom_line(aes(y= South_Korea, color= "South Korea")) +
+  geom_line(aes(y= United_Arab_Emirates, color= "United Arab Emirates")) +
+  geom_line(aes(y= United_States, color= "United States")) +
+  geom_line(aes(y= China, color = "China")) +
+  xlab("Year") +
+  ylab("Amount of personal computers") +
+  xlim(1990, 2006)
+  ggtitle("Chart 7: Personal Computers growth.") +
+  theme(plot.title = element_text(hjust = 0.5, colour = "dark blue"))
+
+```
+
+```{r, results='markup'}
+
+t18 <- data.frame(read.csv("Top_Countries_Cellphones.csv"))
+
+kable(t18,
+  col.names = gsub("[X]", "", names(t18)),
+  caption = "Table 18: Top 10 countries in Cell Phones.",
+  "html") %>%
+  kable_styling(full_width = F)
+
+```
+
+```{r, results='markup'}
+
+chart8 <- data.frame(read.csv("cell_phones_total_chart.csv", fileEncoding = "UTF-8-BOM"))
+#chart8
+
+ggplot(chart8, aes(x= Year)) +
+  geom_line(aes(y= Canada, color= "Canada")) + 
+  geom_line(aes(y= Denmark, color= "Denmark")) +
+  geom_line(aes(y= Iceland, color= "Iceland")) +
+  geom_line(aes(y= Kuwait, color= "Kuwait")) +
+  geom_line(aes(y= Mexico, color= "Mexico")) +
+  geom_line(aes(y= Norway , color= "Norway")) +
+  geom_line(aes(y= Qatar, color= "Qatar")) +
+  geom_line(aes(y= South_Korea, color= "South Korea")) +
+  geom_line(aes(y= United_Arab_Emirates, color= "United Arab Emirates")) +
+  geom_line(aes(y= United_States, color= "United States")) +
+  geom_line(aes(y= China, color = "China")) +
+  xlab("Year") +
+  ylab("Amount of personal computers") +
+  xlim(2000, 2019) +
+  ggtitle("Chart 8: Cell phones growth.") +
+  theme(plot.title = element_text(hjust = 0.5, colour = "dark blue"))
+
+```
+
+Now let us see the statistics of the leading countries, results are presented in
+table 15 to 17.
+
+```{r}
+
+stats_t15 <- xkablesummary(t15, title = "Table 19: Summary Statistics of top 10 countries in regarding internet usage")
+stats_t15
+
+stats_t16 <- xkablesummary(t16, title = "Table 20: Summary Statistics of top 10 countries in broadband subscribers.")
+stats_t16
+
+stats_t17 <- xkablesummary(t17, title = "Table 21: Summary Statistics of top 10 countries in personal computers usage.")
+stats_t17
+
+stats_t18 <- xkablesummary(t18, title = "Table 22: Summary Statistics of top 10 countries in cell phones usage.")
+stats_t18
+
+```
+
+# Conclusions.
+
+According to this analysis, there has undoubtedly been an increase in the tools used for communication. However, the development and use of these has not been the same in all countries;  this stands out in our tables and graphs.
+
+These results must be considered with precaution since we are not considering each country's population. This is important because, in table 15, we see the leading countries in the use of the internet; however, the difference in population between Iceland and China or The United States is a factor that should be taken into account. Therefore, the challenges of each country for developing the needed infrastructure and technology are different.
+
+The population is somehow highlighted in the charts and tables related to quantities since it is here where countries with a higher number of citizens are brought into the results.
+
+Another interesting point from the analysis is that the development has not been constant among the years and beyond the change in each topic's leading places. It is essential to mention the fast growth rate that countries as China, United Arab Emirates, and Qatar have had. If we look at the data before the year 2000, The United States was the leading country in many of these topics, but there was a point in which it was exceeded by China. Additionally, The United Arab Emirates and Qatar had amazing growth after the year 2010.
+
+Results of the broadband speed were also presented within this analysis. It would have been good to have information from other countries as well; unfortunately, this information was not available, but we can take as a reference these results from The United States and have in mind that they correspond to a country that has been able to lead its development of these communication tools within its high number of citizens.
+
+Finally, together with each country's population's size, various challenges have an effect; Social, economic, and infrastructure impediments should be considered in future analysis. This is a topic that was not considered within this work. Still, we should be aware that these barriers are different in each country.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
