@@ -1,0 +1,55 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+
+summary(BroadbandData19$`Max Advertised Downstream Speed (mbps)`)
+plot(BroadbandData19$`Max Advertised Downstream Speed (mbps)`, main = "Advertised Downstream Speed", col= "turquoise")
+
+summary(BroadbandData19$`Max Advertised Upstream Speed (mbps)`)
+plot(BroadbandData19$`Max Advertised Upstream Speed (mbps)`, main = "Advertised Upstream Speed", col= "orange")
+
+ggplot(data= BroadbandData19, aes(x= State, y= `Max Advertised Downstream Speed (mbps)`, main= "States Downstream Speed")) + geom_point(color= c("turquoise")) + labs(title = "States Downstream Speed", x= "State", y = "Max Advertised Downstream Speed (mbps)") + dev.new(width = 100, height = 1000)
+
+ggplot(data= BroadbandData19, aes(x= State, y= `Max Advertised Upstream Speed (mbps)`, main= "States Upstream Speed")) + geom_point(color= c("orange")) + labs(title = "States Upstream Speed", x= "State", y = "Max Advertised Upstream Speed (mbps)") + dev.new(width = 100, height = 1000)
+```
+
+Speed
+```{r}
+max(BroadbandData19$`Max Advertised Downstream Speed (mbps)`, na.rm = TRUE)
+min(BroadbandData19$`Max Advertised Downstream Speed (mbps)`, na.rm = TRUE)
+max(BroadbandData19$`Max Advertised Upstream Speed (mbps)`, na.rm = TRUE)
+min(BroadbandData19$`Max Advertised Upstream Speed (mbps)`, na.rm = TRUE)
+
+LowDownstreamSpeed <- subset(BroadbandData19, `Max Advertised Downstream Speed (mbps)` == 0)
+
+HighDownstreamSpeed <- subset(BroadbandData19, `Max Advertised Downstream Speed (mbps)` == 1000)
+
+LowUpstreamSpeed <- subset(BroadbandData19, `Max Advertised Upstream Speed (mbps)` == 0)
+
+HighUpstreamSpeed <- subset(BroadbandData19, `Max Advertised Downstream Speed (mbps)` == 1000)
+
+LowSpeed <- merge(LowDownstreamSpeed, LowUpstreamSpeed)
+summary(LowSpeed)
+
+HighSpeed <- merge(HighUpstreamSpeed, HighDownstreamSpeed)
+summary(HighSpeed)
+
+```
+
+Providers in states
+```{r}
+HighStatesProviders <- subset(HighSpeed, select = c(`Provider Name`, `Max Advertised Upstream Speed (mbps)`, `Max Advertised Downstream Speed (mbps)`, State) )
+LowStatesProviders <- subset(LowSpeed, select = c(`Provider Name`, `Max Advertised Upstream Speed (mbps)`, `Max Advertised Downstream Speed (mbps)`, State))
+
+rbind(1:199, LowStatesProviders["`Provider Name`", "`Max Advertised Downstream Speed (mbps)`"])
+
+LowStatesProviders2 <- data.frame(rbind(1:1126, LowStatesProviders("`Provider Name`", "`Max Advertised Downstream Speed (mbps)`"))
+str(LowStatesProviders2, vec.len = 1)
+
+
+```
+
