@@ -10,11 +10,11 @@ output:
     toc: yes
     toc_depth: 3
     toc_float: yes
+    theme: united
   pdf_document:
     toc: yes
     toc_depth: '3'
 ---
-
 
 ```{r}
 knitr::opts_chunk$set(echo = TRUE)
@@ -204,20 +204,22 @@ outlierKD2 <- function(df, var, rm=FALSE, boxplt=FALSE, histogram=TRUE, qqplt=FA
 ```
 
 
+###Introduction
+
 Our Data set consists of 54 variables with 3941 observations.
 Upon closer inspection we can see that there are 17 variables related to Alcohol consuption, 16 variables regarding Cannabis use, 10 demographic descriptive variables, and 9 variables related to the individuals' psychological aptitudes during the covid-19 pandemic. 
 
 ```{r}
 library(readr)
-Substance_Use <- read_csv("DSPJ2Data.csv")
+Substance_Use <- read_csv("Substance Use.csv")
 head(Substance_Use)
-str(Substance_Use)
+#str(Substance_Use)
 
 #stats_with function is so that we don't have to indvidually write all variables that start with prefix "CAN" or "ALC"
 main_clean <- Substance_Use %>% select (AGEGRP, PHHLDSZC, IMMIGRNC, SEX, PMARSTC, PEMPSTC, PEDUC_LC, RURURB, STRESS, LS_05,  starts_with('ME'), starts_with('CAN'), starts_with('ALC'), PERS_WGT)
 
-head(main_clean)
-str(main_clean)
+#head(main_clean)
+#str(main_clean)
 
 Alcohol <- subset(Substance_Use[10:26])
 Cannabis <- subset(Substance_Use[27:42])
@@ -228,6 +230,12 @@ Demographics <- subset(Substance_Use[43:50])
 ###EDA
 
 ***Exploring demographic categories and mental health during the pandemic***
+We performed a series of correlations between the variables and throughout categories to expose the significant values and their directional influence (positive or negative). 
+We found the following to be the most highly correlated variables between mental health and demographics were:
+•	Mental health(ME_10)
+o	AGEGRP: -0.101
+•	Stress(ME_15)
+o	AGEGRP: -0.223
 
 ```{r}
 #Employment and pandemic
@@ -264,17 +272,36 @@ cor.test(Substance_Use$IMMIGRNC, Substance_Use$ME_15)
 ```
 
 
-##Alcohol Correlations
+##Correlations
+
+***Alcohol Correlations***
+To further understand the impact Covid 19 had on alcohol consumption, we performed a correlation of all the Alcohol variables to explore the posible relationships between the consumption and psychological state of the individuals.
+We found that increased alcohol consumption during covid quarantine was negatively correlated with mental health (ME_10). And that increased alcohol consumption also shows a weak positive correlation with immigration (0.075). 
+AGEGRP(0.119)
+ME_10(-0.133)
+Isolation(ME_30C): -0.124
+ME_15: -0.118
 
 ```{r}
 Alcohol_correlations <- cor(Alcohol)
 xkabledply(Alcohol_correlations)
+```
 
+
+Alcohol and Demographic Variables
+```{r}
+cor.test(Alcohol$ALC_20,Demographics$PHHLDSZC )
+cor.test(Alcohol$ALC_20, Demographics$AGEGRP)
+cor.test(Alcohol$ALC_20, Demographics$IMMIGRNC)
+cor.test(Alcohol$ALC_20, Demographics$SEX)
+cor.test(Alcohol$ALC_20, Demographics$PMARSTC)
+cor.test(Alcohol$ALC_20, Demographics$PEDUC_LC)
+cor.test(Alcohol$ALC_20, Demographics$RURURB)
+cor.test(Alcohol$ALC_20, Demographics$PEMPSTC)
 ```
 
 ***Alcohol and Mental Health during the pandemic***
 
-Mental Health correlations
 ```{r}
 #Isolation
 cor.test(Substance_Use$ALC_20, Substance_Use$ME_30C)
@@ -293,7 +320,13 @@ cor.test(Substance_Use$ALC_20, Substance_Use$ME_20)
 
 ```
 
-##Cannabis correlations
+
+***Cannabis correlations***
+ME_30C (-0.107)
+ME_10(-0.101)
+ME_15(-0.117)
+AGEGRP(0.245)
+PMARSTC(-0.138)
 
 ```{r}
 Cannabis_correlations <- cor(Cannabis)
@@ -302,7 +335,7 @@ xkabledply(Cannabis_correlations)
 
 ***Cannabis and Mental Health during the pandemic***
 
-Mental Health correlations
+
 ```{r}
 #Isolation
 cor.test(Substance_Use$CAN_15, Substance_Use$ME_30C)
@@ -320,255 +353,254 @@ cor.test(Substance_Use$CAN_15, Substance_Use$ME_15)
 cor.test(Substance_Use$CAN_15, Substance_Use$ME_20)
 ```
 
-###Linear Regression Models
+Cannabis and Demographic Variables
+```{r}
+cor.test(Cannabis$CAN_15,Demographics$PHHLDSZC )
+cor.test(Cannabis$CAN_15, Demographics$AGEGRP)
+cor.test(Cannabis$CAN_15, Demographics$IMMIGRNC)
+cor.test(Cannabis$CAN_15, Demographics$SEX)
+cor.test(Cannabis$CAN_15, Demographics$PMARSTC)
+cor.test(Cannabis$CAN_15, Demographics$PEDUC_LC)
+cor.test(Cannabis$CAN_15, Demographics$RURURB)
+cor.test(Cannabis$CAN_15, Demographics$PEMPSTC)
+```
+
+###Linear Regression Models###
 
 ***Cannabis Model***
+
+Data selection: Demographics and Cannabis
+
 ```{r}
-cannabis_df <- read_csv("DSPJ2Data.csv")
-
-
-# stats_with function is so that I don't have to indvidually write all variables that start with prefix "CAN" or "ALC"
-cannabis_clean <- cannabis_df %>% select (AGEGRP, PHHLDSZC, IMMIGRNC, SEX, PMARSTC, MHDVMHI, STRESS, PERS_WGT, VERDATE, PEMPSTC, PEDUC_LC, starts_with('CAN'), starts_with('ALC'))
-
 #Filter those who never used Canabis, not statued its variable 
 #! mean not in 1, 99, so remove those and keep everything else 
-cannabis_filtered <- cannabis_clean %>% filter(!CAN_05 %in% c(1,99))
+cannabis_filtered <- main_clean %>% filter(!CAN_05 %in% c(1,99))
 
 str(cannabis_filtered)
 
 frequency(cannabis_filtered$CAN_05)
 
-#Next Question, what should be our response variables?
-  #Example: Let's say we want to model on CAN_15 (Increased, Decreased, NA, Stayed about Same). Since this is not continuous or binary, we have to be careful
-  #https://blog.exploratory.io/filter-data-with-dplyr-76cf5f1a258e
-
-#Binary - LM
-#For experiement, removing non-applicable and stay same from analysis and not stated
 frequency(cannabis_filtered$CAN_15)
 
-
 cannabis_inc <- cannabis_filtered %>% filter(!CAN_15 %in% c(9))
-cannabis_inc  <- cannabis_inc %>% mutate(CAN_15_Revised = as.numeric(if_else(CAN_15 == 1,"1","0")), Employed = as.numeric(if_else(PEMPSTC == 4,"0","1")))
+cannabis_inc  <- cannabis_inc %>% mutate(CAN_15_Revised = as.numeric(if_else(CAN_15 == 1,"1","0")), Employed = as.numeric(if_else(PEMPSTC == 4,"0","1")), Marital = as.numeric(if_else(PMARSTC %in% c(1,2), "1", "0")))
 cannabis_inc <- cannabis_inc %>% select(-c(CAN_15))
 
 cannabis_dec <- cannabis_filtered %>% filter(!CAN_15 %in% c(9))
 cannabis_dec  <- cannabis_dec %>% mutate(CAN_15_Revised = as.numeric(if_else(CAN_15 == 2,"1","0")), Employed = as.numeric(if_else(PEMPSTC == 4,"0","1")))
 cannabis_dec <- cannabis_dec %>% select(-c(CAN_15))
-
 ```
 
-
+Model Building
 ```{r}
-lmCAN <- glm(CAN_15_Revised ~ SEX + AGEGRP + PMARSTC + PEDUC_LC + Employed + PHHLDSZC + IMMIGRNC, data = cannabis_inc, weights = PERS_WGT)
-summary(lmCAN)
+library(car)
+lmCanDem <- lm(CAN_15_Revised ~ SEX + AGEGRP + RURURB, data = cannabis_inc, weights = PERS_WGT)
+summary(lmCanDem)
 
-library(ggiraphExtra)
-library(plyr)
-library(ggiraph)
+lmCanMH <- lm(CAN_15_Revised ~ ME_30C + ME_15, data = cannabis_inc)
+summary(lmCanMH)
 
-modCAN <- glm(CAN_15_Revised ~ PEDUC_LC + Employed + PHHLDSZC, data = cannabis_inc, family = binomial)
-ggPredict(modCAN,se=TRUE,interactive=TRUE)
+bestlmCan <- lm(CAN_15_Revised ~ AGEGRP + SEX + RURURB + ME_10, data = cannabis_inc) 
+anova(bestlmCan)
+vif(bestlmCan)
 
-
+plot(lmCanDem, main = "Linear Regression Cannabis Model", col="turquoise")
 ```
+
+We revised the CAN_15 variable to assign binary classification whether cannabis consumption has increased or not increased after the pandemic. We then performed a simple linear regression to see which demographic factors are correlated with increased use of cannabis. From the results on a 5% threshold, we can see that sex, age group and rural/urban indicators are the two strongest drivers of increased cannabis use. That is, the younger age groups, females and those residing in urban areas are more likely to increase cannabis consumption after the pandemic. 
+
+We look at the Q-Q plot and the residuals vs leverage plot. Out of approximately 1200 points that can impact the model performance, there are total 3 points above 0.3, one of which is above 0.5. This particular row has more weight than others, as the data assigns different weight to different observations. So this means that this particular observation has a higher weight in the dataset and has the potential to impact the model. 
+
+We also performed a similar simple linear regression on the mental health factors and created a best fit model combining both demographics and mental health variables. 
 
 ***ALcohol Model***
 
+Data Selection: Alcohol and Demographics
+
 ```{r}
 #Filter those who dont drink, not statued its variable 
-#! mean not in 1, 99, so remove those and keep everything else 
-alcohol_filtered <- main_clean %>% filter(!ALC_05 %in% c(1,99))
+#! mean not in 3, 99, so remove those and keep everything else 
+alcohol_filtered <- main_clean %>% filter(!ALC_05 %in% c(3,99))
 
 str(alcohol_filtered)
 
 frequency(alcohol_filtered$ALC_05)
 
-#Next Question, what should be our response variables?
-  #Example: Let's say we want to model on ALC_10C (Increased, Decreased, NA, Stayed about Same). Since this is not continuous or binary, we have to be careful
-  #https://blog.exploratory.io/filter-data-with-dplyr-76cf5f1a258e
-
-#Binary - LM
-#For experiement, removing non-applicable and stay same from analysis and not stated
 frequency(alcohol_filtered$ALC_20)
 
 
 alcohol_inc <- alcohol_filtered %>% filter(!ALC_20 %in% c(9))
-alcohol_inc  <- alcohol_inc %>% mutate(ALC_20_Revised = as.numeric(if_else(ALC_20 == 1,"1","0")), Employed = as.numeric(if_else(PEMPSTC == 4,"0","1")))
+alcohol_inc  <- alcohol_inc %>% mutate(ALC_20_Revised = as.numeric(if_else(ALC_20 == 1,"1","0")), Employed = as.numeric(if_else(PEMPSTC == 4,"0","1")), Marital = as.numeric(if_else(PMARSTC %in% c(1,2), "1", "0")))
 alcohol_inc <- alcohol_inc %>% select(-c(ALC_20))
 
 alcohol_dec <- alcohol_filtered %>% filter(!ALC_20 %in% c(9))
 alcohol_dec <- alcohol_dec %>% mutate(ALC_20_Revised = as.numeric(if_else(ALC_20 == 2,"1","0")), Employed = as.numeric(if_else(PEMPSTC == 4,"0","1")))
 alcohol_dec <- alcohol_dec %>% select(-c(ALC_20))
-
-
 ```
 
-
+Model building
 ```{r}
-lmALC <- glm(ALC_20_Revised ~ SEX + AGEGRP + PMARSTC + PEDUC_LC + Employed + PHHLDSZC + IMMIGRNC, data = cannabis_inc, weights = PERS_WGT)
-summary(lmALC)
+lmAlcDem <- lm(ALC_20_Revised ~ SEX + AGEGRP + Marital + Employed + PHHLDSZC + IMMIGRNC + RURURB, data = alcohol_inc, weights = PERS_WGT)
+summary(lmAlcDem)
 
-modALC <- glm(ALC_20_Revised ~ SEX + AGEGRP + PMARSTC + PEDUC_LC + Employed + PHHLDSZC + IMMIGRNC, data = alcohol_inc,family = binomial)
-ggPredict(modALC,se=TRUE,interactive=TRUE)
+lmAlcMH <- lm(ALC_20_Revised ~ ME_30C + ME_10 + ME_15, data = alcohol_inc)
+summary(lmAlcMH)
+
+bestlmAlc <- lm(ALC_20_Revised ~ AGEGRP + PEDUC_LC + ME_30C + ME_10, data = alcohol_inc) 
+anova(bestlmAlc)
+vif(bestlmAlc)
+
+plot(lmAlcDem, main = "Linear Regression Alcohol Model", col="orange")
 ```
 
-###Feature Selection
-***ALcohol***
-```{r, results='markup'}
-library(jtools)
-library("leaps")
-reg.data.alc <- regsubsets(ALC_20_Revised ~ SEX + AGEGRP + PMARSTC + PEDUC_LC + Employed + PHHLDSZC + IMMIGRNC, data = alcohol_inc,
-nbest = 2,
-nvmax = NULL,
-force.in = NULL, force.out = NULL,
-method = "exhaustive")
+Just like the variable CAN_15, we revised the variable ALC_20 to assign binary classification whether alcohol consumption has increased or not increased after the pandemic for the respondents. We performed a simple linear regression here as well to see which demographic factors are correlated with increased use of alcohol. From the results on a 5% threshold, we can see that there are several significant drivers of increased alcohol use. These are, sex, age group, household size, marital status, rural/urban settlement, employment and immigration status. Like cannabis, the younger age group and females are more likely to increase alcohol consumption after the pandemic. Likewise, people in smaller household size, living in urban settlement, the ones unemployed, married and born in Canada are more likely to increase alcohol consumption after the pandemic.
 
-plot(reg.data.acl, scale = "adjr2", main = "Adjusted R^2")
-plot(reg.data.acl, scale = "bic", main = "BIC")
-plot(reg.data.alc, scale = "Cp", main = "Cp")
+Next we created some plots from the model. Looking at the Q-Q plot and the residuals vs leverage plot, here again there are three points that get highlighted (high residual and high leverage). However, there are just these three points and none of these have greater than 0.5 cooks distance thus they are not influential and shouldn’t materially impact our models.
 
+We also performed a similar simple linear regression on the mental health factors and created a best fit model combining both demographics and mental health variables.
 
-summary.reg <- summary(reg.data.alc)
-as.data.frame(summary.reg$outmat)
-which.max(summary.reg$adjr2)
+###GLM MODELS###
 
-FSALC <- lm((ALC_20_Revised ~ SEX + AGEGRP + PMARSTC + PEDUC_LC + Employed + PHHLDSZC + IMMIGRNC, data = alcohol_inc)
-summary(FSALC)
-summ(FSALC)
-vif(FSALC)
-```
-
+***Alcohol***
 ```{r}
-library(ggplot2)
-library(GGally)
+glmAlcDem <- glm(ALC_20_Revised ~ SEX + AGEGRP + PMARSTC + PEDUC_LC + Employed + PHHLDSZC + IMMIGRNC, data = alcohol_inc, weights = PERS_WGT)
+summary(glmAlcDem)
+vif(glmAlcDem)
 
-pairs(Alcohol, col = "red", pch = 1, main = "Alcohol Pairs Plot")
+glmAlcMH <- glm(ALC_20_Revised ~ ME_30C + ME_10 + ME_15 + LS_05, data = alcohol_inc, weights = PERS_WGT)
+summary(lmAlcMH)
+vif(glmAlcMH)
+```
 
-ggpairs(Alcohol, title = "Alcohol ggpairs Plot")
-
-loadPkg(psych)
-pairs.panels(Alcohol[,-5], 
-             method = "pearson", # correlation method
-             hist.col = "#00AFBB", # set histogram color, can use "#22AFBB", "red",
-             density = TRUE,  # show density plots
-             ellipses = TRUE # show correlation ellipses
-             )
-
+Best Alcohol GLM
+```{r}
+#Select the most significant variables from both demographic and mental health correlations
+bestglmAlc <- glm(ALC_20_Revised ~ AGEGRP + SEX + ME_30C + ME_10, data = alcohol_inc)
+summary(bestglmAlc)
+vif(bestglmAlc)
+anova(bestglmAlc)
 ```
 
 ***Cannabis***
-```{r, results='markup'}
-reg.data.can <- regsubsets(CAN_15_Revised ~ PEDUC_LC + Employed + PHHLDSZC, data = cannabis_inc, 
-nbest = 2,
-nvmax = NULL,
-force.in = NULL, force.out = NULL,
-method = "exhaustive")
-
-plot(reg.data.can, scale = "adjr2", main = "Adjusted R^2")
-plot(reg.data.can, scale = "bic", main = "BIC")
-plot(reg.data.can, scale = "Cp", main = "Cp")
-
-summary.reg.can <- summary(reg.data.can)
-as.data.frame(summary.reg.can$outmat)
-which.max(summary.reg.can$adjr2)
-
-
-FSCAN <- lm(CAN_15_Revised ~ SEX + AGEGRP + PMARSTC + PEDUC_LC + Employed + PHHLDSZC + IMMIGRNC, data = cannabis_inc)
-summary(FSCAN)
-summ(FSCAN)
-vif(FSCAN)
-
-```
-
 ```{r}
-library(ggplot2)
-library(GGally)
+glmCanDem <- glm(CAN_15_Revised ~ SEX + AGEGRP + PMARSTC + PEDUC_LC + Employed + PHHLDSZC + IMMIGRNC, data = cannabis_inc, weights = PERS_WGT)
+summary(glmCanDem)
+vif(glmCanDem)
 
-pairs(Cannabis, col = "red", pch = 1, main = "Cannabis Pairs Plot")
-
-ggpairs(Cannabis, title = "Cannabis ggpairs Plot")
-
-loadPkg(psych)
-pairs.panels(Cannabis[,-5], 
-             method = "pearson", # correlation method
-             hist.col = "#00AFBB", # set histogram color, can use "#22AFBB", "red",
-             density = TRUE,  # show density plots
-             ellipses = TRUE # show correlation ellipses
-             )
+glmCanMH <- glm(CAN_15_Revised ~ ME_30C + ME_10 + ME_15 + LS_05, data = cannabis_inc)
+summary(glmCanMH)
+vif(glmCanMH)
 ```
 
-###PCR Models
+Best Cannabis GLM 
+```{r}
+#Select the most significant variables from both demographic and mental health correlations
+bestglmCan <- glm(CAN_15_Revised ~ AGEGRP + SEX + PHHLDSZC +ME_30C +ME_15, data = cannabis_inc)
+summary(bestglmCan)
+vif(bestglmCan)
+anova(bestglmCan)
+```
 
-***Cannabis PCR***
+#PCA Models
+
+Cannabis PCA
 ```{r}
 library(olsrr)
 library(caret)
 
-pcrcan <- prcomp(Cannabis)
-xkabledply(pcrcan)
+library(devtools)
+#install_github("vqv/ggbiplot")
+library(ggbiplot)
 
-biplot(pcrcan, c(1,2), scale=0, xlim=c(-20,20), ylim=c(-20,20))
-
+pcacan <- prcomp(Cannabis, scale = TRUE)
+print(pcacan)
+summary(pcacan)
+pcacan$center
+dim(pcacan$x)
 ```
 
-***Cannabis PVE***
+Cannabis biplots
 ```{r}
-library(lattice)
-library(grid)
-library(gridExtra)
+#install.packages("FactoMineR")
+library("FactoMineR")
+res.pca.can <- PCA(Cannabis, scale= TRUE)
 
-PVECAN <- pcrcan$values / sum(pcrcan$values)
-n <- length(PVECAN)
+#install("factoextra")
+library("factoextra")
+factoextra::fviz_pca_biplot(res.pca.can, axes = c(1, 2), col.ind = "black", col.var = "steelblue",repel = TRUE, select.var = list(contrib = 5),  title = "Cannabis PCA - Biplot")
 
-PVECANplot <- qplot(c(1:n), PVECAN) +
-geom_line() +
-xlab("Principal Component") +
-ylab("PVECAN") +
-ggtitle("Scree Plot") +
-ylim(0,1)
+```
+For the Cannabis consumption data, we end up with 16 different PC models. We can see that most of the variation is expressed by PC1, PC2, and PC3. Looking closely at these models, it is noticeable that the CAN_20 variables (ranging from A to I) are the most important contributors to the first PC. The second PC is also affected by a range of variables, from CAN_25AGH to CAN_25E. 
+The third PC is best explained by the CAN_05 variable with some influence from the CAN_05 and CAN_10 variables. It is also notable that 95% of the total variation in the dataset is expressed by the three first PC’s.  
+The biplot for the Cannabis PCA allows us to see the displayed variants explained by the PC’s. We can see that the first component explains 62% of the variability in the dataset, whereas the second component explains 26% of the variability. 
 
-cumPVECAN <- qplot(c(1:n), cumsum(PVECAN)) +
-geom_line() +
-xlab("Principal Component") +
-ylab(NULL) +
-ggtitle("Cumulative Scree Plot") +
-ylim(0,1)
+```{r}
+#compute standard deviation of each principal component
+pcacan_std_dev <- pcacan$sdev
 
-grid.arrange(PVECANplot, cumPVECAN, ncol = 9)
+#compute variance
+pcacan_var <- pcacan_std_dev^2
+
+#proportion of variance explained
+pcacan_prop_varia<- pcacan_var/sum(pcacan_var)
+pcacan_prop_varia[1:17]
+
+#scree plot
+plot(pcacan_prop_varia, xlab = "Principal Component Cannabis",
+             ylab = "Proportion of Variance Explained",
+             type = "b")
+
+#cumulative scree plot
+plot(cumsum(pcacan_prop_varia), xlab = "Principal Component Cannabis",
+              ylab = "Cumulative Proportion of Variance Explained",
+              type = "b")
+
+```
+In order to find which components explain the highest variance, we computed the proportion of variance explained by dividing the variance by sum of the total variance. The output shows us that the first (62%) and second (26%) components explain the highest variance. When illustrated in a scree plot, we can see that we have reduced the predictors for Cannabis consumption from 16 to 5, without compromising the explained variance. Additionally, our cumulative variance plot shows that the 6 selected components produce a variance of about 99%. Our next steps would be to select these components and produce a predictive model.
+
+
+Alcohol PCA
+```{r}
+pcaalc <- prcomp(Alcohol, scale=TRUE)
+summary(pcaalc)
+print(pcaalc)
+pcaalc$center
+dim(pcaalc$x)
 ```
 
-***Alcohol PCR***
+Alcohol biplots
 ```{r}
-pcralc <- prcomp(Alcohol)
-xkabledply(pcralc)
+res.pca.alc <- PCA(Alcohol, scale=TRUE)
 
-biplot(pcralc, c(1,2), scale=0, xlim=c(-20,20), ylim=c(-20,20))
-biplot(pcralc, c(1,3), scale=0, xlim=c(-20,20), ylim=c(-20,20))
-biplot(pcralc, c(1,4), scale=0, xlim=c(-20,20), ylim=c(-20,20))
-biplot(pcralc, c(1,2), scale=0, xlim=c(-20,20), ylim=c(-20,20))
+factoextra::fviz_pca_biplot(res.pca.alc,  axes = c(1, 2), col.ind = "black", col.var = "steelblue",repel = TRUE, select.var = list(contrib = 5),  title = "ALcohol PCA - Biplot")
 ```
 
-***ALcohol PVE***
+The Alcohol data produces 17 PC models. The most variation in Alcohol consumption is also expressed by PC1, PC2, PC3, containing 98% of the variation in the dataset. We can see that the most important contributors to the first PC are the ALC_25 variables (ranging from A to G). The second PC is affected by a different range of variables, those belonging to the ALC_30 group (ranging from A to F). And, the third PC is almost equally affected by the variables ALC_05, ALC_10C, and ALC_15C. 
+The variants displayed in the Alcohol PCA biplot show us that the first component explains 48% of the variability in the dataset, whereas the second component explains 36% of the variability. 
+
 ```{r}
-library(lattice)
-library(grid)
-library(gridExtra)
+#compute standard deviation of each principal component
+pcaalc_std_dev <- pcaalc$sdev
 
-PVEALC <- pcralc$values / sum(pcralc$values)
-n <- length(PVEALC)
+#compute variance
+pcaalc_var <- pcaalc_std_dev^2
 
-PVEALCplot <- qplot(c(1:n), PVEALC) +
-geom_line() +
-xlab("Principal Component") +
-ylab("PVEALC") +
-ggtitle("Scree Plot") +
-ylim(0,1)
+#proportion of variance explained
+pcaalc_prop_varia<- pcaalc_var/sum(pcaalc_var)
+pcaalc_prop_varia[1:17]
 
-cumPVEALC <- qplot(c(1:n), cumsum(PVEALC)) +
-geom_line() +
-xlab("Principal Component") +
-ylab(NULL) +
-ggtitle("Cumulative Scree Plot") +
-ylim(0,1)
+#scree plot
+plot(pcaalc_prop_varia, xlab = "Principal Component Alcohol",
+             ylab = "Proportion of Variance Explained",
+             type = "b")
 
-grid.arrange(PVEALCplot, cumPVEALC, ncol = 23)
+#cumulative scree plot
+plot(cumsum(pcaalc_prop_varia), xlab = "Principal Component Alcohol",
+              ylab = "Cumulative Proportion of Variance Explained",
+              type = "b")
+```
+By computing the proportion of variance explained, we can see that the components explaining the highest variance are the first (48 %) and the second (36%). Our scree plot shows that by using PCA we have reduced the predictors in the data set from 17 to 4 without compromising our explained variance. We can see in the cumulative variance plot that our 4 selected components result in a variance close to 99%. Our next steps would be to select these components and produce a predictive model. 
+
+ 
+###Conclusion###
+
